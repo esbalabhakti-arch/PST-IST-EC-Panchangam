@@ -1,36 +1,34 @@
-// Multi-city Chaandramaanam Panchangam
-// Each city uses its OWN Panchangam file and LOCAL time.
+// Multi-city Panchangam viewer using a single canonical file:
+// panchangam_Portland.txt (timestamps in Portland local time = PST).
 
+// City configuration (just time zones & labels)
 const CITY_CONFIG = {
   portland: {
     id: "portland",
     displayName: "Portland, OR – USA",
-    timeZone: "America/Los_Angeles",
-    file: "panchangam_Portland.txt"
+    timeZone: "America/Los_Angeles"
   },
   boston: {
     id: "boston",
     displayName: "Boston, MA – USA",
-    timeZone: "America/New_York",
-    file: "panchangam_Boston.txt"
+    timeZone: "America/New_York"
   },
   chennai: {
     id: "chennai",
     displayName: "Chennai, India",
-    timeZone: "Asia/Kolkata",
-    file: "panchangam_Chennai.txt"
+    timeZone: "Asia/Kolkata"
   }
 };
 
 const CITY_IDS = ["portland", "boston", "chennai"];
+const BASE_FILE = "panchangam_Portland.txt";
+
+// Month abbreviations for YYYY-mmm-DD formatting
 const MONTH_ABBR = [
   "jan", "feb", "mar", "apr", "may", "jun",
   "jul", "aug", "sep", "oct", "nov", "dec"
 ];
 
-// ---------- Utilities ----------
-
-// Format a Date for a given time zone as "YYYY-mmm-DD HH:MM"
 function formatInTZ(date, timeZone) {
   const opts = {
     timeZone,
@@ -51,53 +49,38 @@ function formatInTZ(date, timeZone) {
   return `${year}-${MONTH_ABBR[monthN - 1]}-${day} ${hour}:${minute}`;
 }
 
-// Detect which city matches browser time zone best
+// Detect which city matches the browser's time zone
 function detectHomeCity() {
   const browserTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
   for (const id of CITY_IDS) {
     if (CITY_CONFIG[id].timeZone === browserTZ) return id;
   }
-
-  // Fallback: nearest offset
-  const now = new Date();
-  const browserOffset = now.getTimezoneOffset();
-  let bestId = "portland";
-  let bestDiff = Infinity;
-
-  for (const id of CITY_IDS) {
-    const tz = CITY_CONFIG[id].timeZone;
-    const tzDate = new Date(now.toLocaleString("en-US", { timeZone: tz }));
-    const tzOffset = tzDate.getTimezoneOffset();
-    const diff = Math.abs(tzOffset - browserOffset);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestId = id;
-    }
-  }
-  return bestId;
+  return "portland"; // fallback
 }
 
-// Build a Date object whose calendar fields match the given
-// "YYYY/MM/DD" and "HH:MM" in the *same* (browser) local zone.
-// (We use this consistently for both boundaries and "now" per city,
-// so comparisons are internally consistent.)
-function makeLocalDate(dStr, tStr) {
-  const [Y, M, D] = dStr.split("/").map(Number);
-  const [h, m] = tStr.split(":").map(Number);
+// Parse dates from panchangam text (assumes they are in *local* Portland time,
+// which should match the browser time zone when the Portland file is used).
+function makeDateLocal(dateStr, timeStr) {
+  const [Y, M, D] = dateStr.split("/").map(Number);
+  const [h, m] = timeStr.split(":").map(Number);
+  // This creates a Date in the browser's local time zone; since the file is
+  // written in Portland local time and you are in Portland, this is OK.
   return new Date(Y, M - 1, D, h, m, 0, 0);
 }
 
-// Parse Panchangam text into intervals for tithi/nakshatra/yogam/karanam
 function parsePanchangam(text) {
   const lines = text.split(/\r?\n/);
-  const data = { tithi: [], nakshatra: [], yogam: [], karanam: [] };
+  const data = {
+    tithi: [],
+    nakshatra: [],
+    yogam: [],
+    karanam: []
+  };
   let section = null;
 
   for (let raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-
     const lower = line.toLowerCase();
 
     if (lower.startsWith("thithi details")) {
@@ -113,9 +96,8 @@ function parsePanchangam(text) {
       section = "karanam"; continue;
     }
 
-    // Ignore "Next Thithi:", etc.
-    if (lower.startsWith("next ")) continue;
     if (!section) continue;
+    if (lower.startsWith("next ")) continue;
 
     const m = line.match(
       /^([^:]+):\s+(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2})\s+to\s+(\d{4}\/\d{2}\/\d{2})\s+(\d{2}:\d{2})/
@@ -125,19 +107,19 @@ function parsePanchangam(text) {
     const [, name, d1, t1, d2, t2] = m;
     data[section].push({
       name: name.trim(),
-      start: makeLocalDate(d1, t1),
-      end: makeLocalDate(d2, t2)
+      start: makeDateLocal(d1, t1),
+      end: makeDateLocal(d2, t2)
     });
   }
+
   return data;
 }
 
-// Find current & next interval for given "now"
-function findCurrentAndNext(intervals, now) {
+function findCurrentAndNext(intervals, nowUtc) {
   let currentIdx = -1;
   for (let i = 0; i < intervals.length; i++) {
     const it = intervals[i];
-    if (now >= it.start && now < it.end) {
+    if (nowUtc >= it.start && nowUtc < it.end) {
       currentIdx = i;
       break;
     }
@@ -149,19 +131,20 @@ function findCurrentAndNext(intervals, now) {
 
   if (currentIdx >= 0) {
     current = intervals[currentIdx];
-    remainingMs = current.end - now;
+    remainingMs = current.end - nowUtc;
     if (currentIdx + 1 < intervals.length) {
       next = intervals[currentIdx + 1];
     }
   } else {
-    // Not inside any interval – pick next one in future, if any
+    // If we are before all listed intervals, the next is the first one after nowUtc
     for (let i = 0; i < intervals.length; i++) {
-      if (now < intervals[i].start) {
+      if (nowUtc < intervals[i].start) {
         next = intervals[i];
         break;
       }
     }
   }
+
   return { current, next, remainingMs };
 }
 
@@ -183,16 +166,16 @@ function shortKey(category) {
   }
 }
 
-function fillCategory(cityId, cat, data, nowForCity, timeZone) {
-  const intervals = data[cat];
+function fillCategory(cityId, category, data, nowUtc, timeZone) {
+  const intervals = data[category];
   const currentEl = document.getElementById(
-    `${cityId}-${shortKey(cat)}-current`
+    `${cityId}-${shortKey(category)}-current`
   );
   const remEl = document.getElementById(
-    `${cityId}-${shortKey(cat)}-remaining`
+    `${cityId}-${shortKey(category)}-remaining`
   );
   const nextEl = document.getElementById(
-    `${cityId}-${shortKey(cat)}-next`
+    `${cityId}-${shortKey(category)}-next`
   );
 
   if (!intervals || intervals.length === 0) {
@@ -202,7 +185,7 @@ function fillCategory(cityId, cat, data, nowForCity, timeZone) {
     return;
   }
 
-  const { current, next, remainingMs } = findCurrentAndNext(intervals, nowForCity);
+  const { current, next, remainingMs } = findCurrentAndNext(intervals, nowUtc);
 
   if (current) {
     currentEl.textContent = current.name;
@@ -225,61 +208,58 @@ function setStatus(cityId, msg) {
   if (el) el.textContent = msg || "";
 }
 
-// ---------- Main ----------
-
 document.addEventListener("DOMContentLoaded", () => {
-  const browserNow = new Date();
-  const browserTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const nowUtc = new Date(); // one global instant for all calculations
 
   // Show browser time
-  const browserTimeEl = document.getElementById("browser-time");
-  browserTimeEl.textContent =
-    "Current time (your browser): " + formatInTZ(browserNow, browserTZ);
+  const browserTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const browserTime = formatInTZ(nowUtc, browserTZ);
+  document.getElementById("browser-time").textContent =
+    `Current time (your browser): ${browserTime}`;
 
-  // Detect "you are here"
-  const homeCityId = detectHomeCity();
+  const homeCity = detectHomeCity();
   CITY_IDS.forEach(id => {
     const hereEl = document.getElementById(`here-${id}`);
     if (!hereEl) return;
-    hereEl.textContent = id === homeCityId ? "You are here!" : "";
+    hereEl.textContent = id === homeCity ? "You are here!" : "";
   });
 
-  // For each city, compute its local "now" and local time display,
-  // then load its Panchangam file and fill all four categories.
-  CITY_IDS.forEach(cityId => {
-    const cfg = CITY_CONFIG[cityId];
-
-    // City local "now"
-    const nowCityStr = browserNow.toLocaleString("en-US", {
-      timeZone: cfg.timeZone
-    });
-    const nowCity = new Date(nowCityStr); // local Date with same calendar fields
-
-    const localTimeEl = document.getElementById(`localtime-${cityId}`);
-    if (localTimeEl) {
-      localTimeEl.textContent =
-        "Local time here: " + formatInTZ(nowCity, cfg.timeZone);
+  // Local time labels for each city
+  CITY_IDS.forEach(id => {
+    const cfg = CITY_CONFIG[id];
+    const el = document.getElementById(`localtime-${id}`);
+    if (el) {
+      el.textContent = `Local time here: ${formatInTZ(nowUtc, cfg.timeZone)}`;
     }
-
-    // Load this city's Panchangam file
-    fetch(cfg.file)
-      .then(resp => {
-        if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status} for ${cfg.file}`);
-        }
-        return resp.text();
-      })
-      .then(text => {
-        const data = parsePanchangam(text);
-        setStatus(cityId, "");
-
-        ["tithi", "nakshatra", "yogam", "karanam"].forEach(cat => {
-          fillCategory(cityId, cat, data, nowCity, cfg.timeZone);
-        });
-      })
-      .catch(err => {
-        console.error("Error loading Panchangam for", cityId, err);
-        setStatus(cityId, "Error loading Panchangam file.");
-      });
   });
+
+  // Load the single canonical Panchangam file (Portland)
+  fetch(BASE_FILE)
+    .then(resp => {
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} for ${BASE_FILE}`);
+      }
+      return resp.text();
+    })
+    .then(text => {
+      const data = parsePanchangam(text);
+
+      // Clear status
+      CITY_IDS.forEach(id => setStatus(id, ""));
+
+      // For each city, fill categories using the same data & same instant,
+      // but formatting in the city's own time zone.
+      CITY_IDS.forEach(id => {
+        const tz = CITY_CONFIG[id].timeZone;
+        ["tithi", "nakshatra", "yogam", "karanam"].forEach(cat => {
+          fillCategory(id, cat, data, nowUtc, tz);
+        });
+      });
+    })
+    .catch(err => {
+      console.error("Error loading Panchangam", err);
+      CITY_IDS.forEach(id => {
+        setStatus(id, `Error loading Panchangam file: ${err.message}`);
+      });
+    });
 });
