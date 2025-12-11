@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Portland, OR - USA - Pacific Time Chaandramaanam Panchangam</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+      background: #f6f2e9;
+    }
+
+    /* Header layout */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Elegant Guru Image */
+    .header img {
+      width: 180px;
+      height: auto;
+      border: 4px solid #d4af37;
+      border-radius: 12px;
+      box-shadow: 0 0 18px rgba(212, 175, 55, 0.45);
+      background: white;
+      padding: 6px;
+    }
+
+    .header-title {
+      flex-grow: 1;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #333;
+    }
+
+    .sanskrit {
+      font-size: 1.15rem;
+      margin-top: 0.3rem;
+      color: #7a5c15;
+      font-weight: 600;
+      font-family: "Noto Sans Devanagari", serif;
+    }
+
+    /* Gold divider */
+    .divider {
+      height: 3px;
+      width: 100%;
+      background: linear-gradient(to right, #d4af37, #f8e9a1, #d4af37);
+      margin: 1rem 0 1.2rem 0;
+      border-radius: 2px;
+    }
+
+    /* Current time style */
+    .current-time-top {
+      text-align: center;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #7a5c15;
+      margin-bottom: 0.35rem;
+      text-shadow: 0 0 6px rgba(212, 175, 55, 0.35);
+    }
+
+    /* Backend timestamp – now displayed above footer */
+    .backend-time-line {
+      text-align: center;
+      font-size: 0.8rem;   /* smaller */
+      font-style: italic;
+      color: #b00020;      /* red */
+      margin: 0.6rem 0 0.4rem 0;
+    }
+
+    /* Status line */
+    .status-line {
+      text-align: center;
+      font-size: 0.85rem;
+      color: #555;
+      margin-bottom: 1rem;
+    }
+
+    /* Two-column content layout */
+    .content {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .left-column {
+      flex: 2 1 55%;
+    }
+
+    .right-column {
+      flex: 1 1 40%;
+    }
+
+    /* Card / section styling */
+    .section {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    .label {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .value {
+      font-weight: 500;
+    }
+
+    .time-remaining {
+      font-size: 0.95rem;
+      color: #444;
+    }
+
+    /* Right-hand meta box */
+    .meta-section h3 {
+      margin-top: 0;
+      margin-bottom: 0.75rem;
+    }
+
+    .meta-row {
+      margin-bottom: 0.35rem;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 1.2rem;
+      padding-top: 1rem;
+      border-top: 1px solid #d4af37;
+      text-align: center;
+      font-size: 0.95rem;
+      color: #444;
+      line-height: 1.45;
+    }
+
+    .footer strong {
+      color: #7a5c15;
+    }
+
+    @media (max-width: 700px) {
+      .content {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <img src="guru.png" alt="Guru Image" />
+
+    <div class="header-title">
+      <h1>Portland, OR - USA - Pacific Time</h1>
+      <h1>Chaandramaanam Panchangam</h1>
+      <!-- <div class="sanskrit">चन्द्रमान पञ्चाङ्गम्</div> -->
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Current time (browser) -->
+  <div id="now-display" class="current-time-top"></div>
+
+  <!-- Status line (file load message) -->
+  <div id="status" class="status-line"></div>
+
+  <!-- Main two-column content -->
+  <div class="content">
+
+    <!-- LEFT: dynamic sections -->
+    <div class="left-column">
+      <!-- Tithi -->
+      <div class="section">
+        <h3>Tithi</h3>
+        <div><span class="label">Current:</span> <span id="tithi-current" class="value">–</span></div>
+        <div class="time-remaining" id="tithi-remaining"></div>
+        <div><span class="label">Next:</span> <span id="tithi-next" class="value">–</span></div>
+      </div>
+
+      <!-- Nakshatra -->
+      <div class="section">
+        <h3>Nakshatra</h3>
+        <div><span class="label">Current:</span> <span id="nak-current" class="value">–</span></div>
+        <div class="time-remaining" id="nak-remaining"></div>
+        <div><span class="label">Next:</span> <span id="nak-next" class="value">–</span></div>
+      </div>
+
+      <!-- Yogam -->
+      <div class="section">
+        <h3>Yogam</h3>
+        <div><span class="label">Current:</span> <span id="yoga-current" class="value">–</span></div>
+        <div class="time-remaining" id="yoga-remaining"></div>
+        <div><span class="label">Next:</span> <span id="yoga-next" class="value">–</span></div>
+      </div>
+
+      <!-- Karanam -->
+      <div class="section">
+        <h3>Karanam</h3>
+        <div><span class="label">Current:</span> <span id="karana-current" class="value">–</span></div>
+        <div class="time-remaining" id="karana-remaining"></div>
+        <div><span class="label">Next:</span> <span id="karana-next" class="value">–</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Samvatsaram / Ayanam / Ruthu / Masam / Paksham -->
+    <div class="right-column">
+      <div class="section meta-section">
+        <h3>Samvatsaram &amp; Details</h3>
+
+        <div class="meta-row">
+          <span class="label">Samvatsaram:</span>
+          <span id="samvatsaram" class="value">–</span>
+        </div>
+        <div class="meta-row">
+          <span class="label">Ayanam:</span>
+          <span id="ayanam" class="value">–</span>
+        </div>
+        <div class="meta-row">
+          <span class="label">Ruthu:</span>
+          <span id="ruthu" class="value">–</span>
+        </div>
+        <div class="meta-row">
+          <span class="label">Masam:</span>
+          <span id="masam" class="value">–</span>
+        </div>
+        <div class="meta-row">
+          <span class="label">Paksham:</span>
+          <span id="paksham" class="value">–</span>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- /content -->
+
+  <!-- Backend Panchangam time stamp (now above footer line) -->
+  <div id="backend-time" class="backend-time-line"></div>
+
+  <!-- Footer -->
+  <div class="footer">
+    Acknowledgments<br />
+    <strong>Shri Ashok Krishnamoorthy, Portland, OR - USA</strong>
+    <br /><br />
+    Contact:<br />
+    <strong>a.krishnamoorthy@comcast.net</strong>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
