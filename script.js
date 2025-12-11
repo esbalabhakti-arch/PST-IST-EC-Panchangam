@@ -1,305 +1,343 @@
-// Multi-city Panchangam viewer for Portland, Boston, Chennai
-// Assumes text files panchangam_Portland.txt, panchangam_Boston.txt,
-// and panchangam_Chennai.txt are in the same folder as this script.
+// script.js for 3-city multi-panchang widget
+// Uses each city's local time (via time zone) to find current Tithi/Nakshatra/Yogam/Karanam
+// and compute "time remaining". Also detects the user's city via browser time zone.
 
-const cities = [
+// --------------- CONFIG -----------------
+
+const MONTH_ABBR = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+];
+
+const CITY_CONFIG = [
   {
     id: "portland",
-    file: "panchangam_Portland.txt",
-    utcOffsetMinutes: -8 * 60, // PST (Dec)
+    timeZone: "America/Los_Angeles",
+    file: "panchangam_portland.txt",
   },
   {
     id: "boston",
-    file: "panchangam_Boston.txt",
-    utcOffsetMinutes: -5 * 60, // EST (Dec)
+    timeZone: "America/New_York",
+    file: "panchangam_boston.txt",
   },
   {
     id: "chennai",
-    file: "panchangam_Chennai.txt",
-    utcOffsetMinutes: 5 * 60 + 30, // IST
+    timeZone: "Asia/Kolkata",
+    file: "panchangam_chennai.txt",
   },
 ];
 
-// --- Helpers ----------------------------------------------------------
+// --------------- TIME HELPERS -----------------
 
-function pad2(n) {
-  return n.toString().padStart(2, "0");
+// Create a Date whose UTC fields equal the city's local date-time
+function makeZonedDate(y, m, d, hh, mm) {
+  return new Date(Date.UTC(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), 0, 0));
 }
 
-// Convert city-local Y/M/D H:M to UTC milliseconds
-function cityLocalToUtcMs(year, month, day, hour, minute, offsetMinutes) {
-  const msAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
-  return msAsUtc - offsetMinutes * 60 * 1000;
+// Format a "zoned" Date (created with makeZonedDate or getNowInZone) as YYYY-mmm-DD HH:MM
+function formatDateTime(dt) {
+  const y = dt.getUTCFullYear();
+  const mIndex = dt.getUTCMonth();
+  const d = String(dt.getUTCDate()).padStart(2, "0");
+  const hh = String(dt.getUTCHours()).padStart(2, "0");
+  const mm = String(dt.getUTCMinutes()).padStart(2, "0");
+  const mmm = MONTH_ABBR[mIndex] || "???";
+  return `${y}-${mmm}-${d} ${hh}:${mm}`;
 }
 
-// Format UTC ms into city-local "YYYY/MM/DD HH:MM"
-function formatCityDateTime(utcMs, offsetMinutes) {
-  const cityMs = utcMs + offsetMinutes * 60 * 1000;
-  const d = new Date(cityMs);
-  const y = d.getUTCFullYear();
-  const m = pad2(d.getUTCMonth() + 1);
-  const day = pad2(d.getUTCDate());
-  const h = pad2(d.getUTCHours());
-  const min = pad2(d.getUTCMinutes());
-  return `${y}/${m}/${day} ${h}:${min}`;
+function formatDateTimeWithSeconds(dt) {
+  const y = dt.getUTCFullYear();
+  const mIndex = dt.getUTCMonth();
+  const d = String(dt.getUTCDate()).padStart(2, "0");
+  const hh = String(dt.getUTCHours()).padStart(2, "0");
+  const mm = String(dt.getUTCMinutes()).padStart(2, "0");
+  const ss = String(dt.getUTCSeconds()).padStart(2, "0");
+  const mmm = MONTH_ABBR[mIndex] || "???";
+  return `${y}-${mmm}-${d} ${hh}:${mm}:${ss}`;
 }
 
-// Get today's date string in city-local time: "YYYY/MM/DD"
-function getCityTodayString(nowUtcMs, offsetMinutes) {
-  const cityMs = nowUtcMs + offsetMinutes * 60 * 1000;
-  const d = new Date(cityMs);
-  const y = d.getUTCFullYear();
-  const m = pad2(d.getUTCMonth() + 1);
-  const day = pad2(d.getUTCDate());
-  return `${y}/${m}/${day}`;
+// Format the browser's own local time as YYYY-mmm-DD HH:MM:SS
+function formatLocalDateTimeWithSeconds(date) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const parts = fmt.formatToParts(date).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+
+  const y = Number(parts.year);
+  const m = Number(parts.month);
+  const d = Number(parts.day);
+  const hh = Number(parts.hour);
+  const mm = Number(parts.minute);
+  const ss = Number(parts.second);
+
+  const mmm = MONTH_ABBR[m - 1] || "???";
+  const dd = String(d).padStart(2, "0");
+  const hhs = String(hh).padStart(2, "0");
+  const mms = String(mm).padStart(2, "0");
+  const sss = String(ss).padStart(2, "0");
+  return `${y}-${mmm}-${dd} ${hhs}:${mms}:${sss}`;
 }
 
-// Human-readable remaining time
-function formatRemaining(ms) {
-  if (ms <= 0) return "0 minutes remaining";
-  const totalMinutes = Math.floor(ms / (60 * 1000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) {
-    return `${hours} hour${hours > 1 ? "s" : ""} ${minutes} minute${
-      minutes !== 1 ? "s" : ""
-    } remaining`;
-  }
-  return `${minutes} minute${minutes !== 1 ? "s" : ""} remaining`;
+// Get "now" in a specific time zone; the returned Date's UTC fields encode local clock time in that zone.
+function getNowInZone(timeZone) {
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const parts = fmt.formatToParts(now).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+
+  const y = Number(parts.year);
+  const m = Number(parts.month);
+  const d = Number(parts.day);
+  const hh = Number(parts.hour);
+  const mm = Number(parts.minute);
+  const ss = Number(parts.second);
+
+  return new Date(Date.UTC(y, m - 1, d, hh, mm, ss, 0));
 }
 
-// Extract one named section (e.g. "Thithi" or "Rahukala")
-function extractSection(text, header) {
-  // header like "Thithi", "Nakshatram", etc.
-  const regex = new RegExp(
-    `${header}\\s+details:\\s*=+([\\s\\S]*?)(?=\\n\\w+\\s+details:|$)`,
-    "i"
-  );
-  const m = text.match(regex);
-  if (!m) return "";
-  return m[1].trim();
+// ------------- INTERVAL HELPERS -----------------
+
+// Example: "Prathama: 2025/12/04 15:14 to 2025/12/05 11:26"
+function parseIntervalLine(line) {
+  const re =
+    /^(.+?):\s*(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}) to (\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})$/;
+  const m = line.trim().match(re);
+  if (!m) return null;
+
+  const name = m[1].trim();
+  const start = makeZonedDate(m[2], m[3], m[4], m[5], m[6]);
+  const end = makeZonedDate(m[7], m[8], m[9], m[10], m[11]);
+  return { name, start, end };
 }
 
-// Parse Panchangam intervals for Tithi/Nakshatra/Yogam/Karanam
-function parseIntervals(sectionText, offsetMinutes) {
-  const lines = sectionText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l);
-
-  const entries = [];
-
-  for (const line of lines) {
-    const match = line.match(
-      /^([^:]+):\s+(\d{4}\/\d{2}\/\d{2})\s+(\d{2}):(\d{2})(?::\d{2})?\s+to\s+(\d{4}\/\d{2}\/\d{2})\s+(\d{2}):(\d{2})(?::\d{2})?/
-    );
-    if (!match) continue;
-
-    const name = match[1].trim();
-    const startDate = match[2];
-    const startHour = parseInt(match[3], 10);
-    const startMin = parseInt(match[4], 10);
-    const endDate = match[5];
-    const endHour = parseInt(match[6], 10);
-    const endMin = parseInt(match[7], 10);
-
-    const [sy, sm, sd] = startDate.split("/").map((x) => parseInt(x, 10));
-    const [ey, em, ed] = endDate.split("/").map((x) => parseInt(x, 10));
-
-    const startUtc = cityLocalToUtcMs(sy, sm, sd, startHour, startMin, offsetMinutes);
-    const endUtc = cityLocalToUtcMs(ey, em, ed, endHour, endMin, offsetMinutes);
-
-    entries.push({ name, startUtc, endUtc });
-  }
-
-  return entries;
-}
-
-// Find current & next entry for now (in UTC ms)
-function findCurrentAndNext(entries, nowUtcMs) {
+function findCurrentAndNext(intervals, nowZoned) {
   let current = null;
   let next = null;
-
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
-    if (nowUtcMs >= e.startUtc && nowUtcMs < e.endUtc) {
-      current = e;
-      if (i + 1 < entries.length) next = entries[i + 1];
-      break;
-    }
-    if (nowUtcMs < e.startUtc) {
-      next = e;
+  for (let i = 0; i < intervals.length; i++) {
+    const iv = intervals[i];
+    if (nowZoned >= iv.start && nowZoned < iv.end) {
+      current = iv;
+      next = intervals[i + 1] || null;
       break;
     }
   }
-
   return { current, next };
 }
 
-// Parse kalas (Rahukala, Yamaganda, Durmuhurtha, Varjyam) for the current day
-function parseKalasForToday(sectionText, offsetMinutes, nowUtcMs) {
-  const todayStr = getCityTodayString(nowUtcMs, offsetMinutes);
-  const lines = sectionText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l);
+function formatTimeRemaining(end, nowZoned) {
+  const ms = end - nowZoned;
+  if (ms <= 0) return "Ended just now";
 
-  const intervals = [];
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
-  for (const line of lines) {
-    const match = line.match(
-      /^([^:]+):\s+(\d{4}\/\d{2}\/\d{2})\s+(\d{2}):(\d{2})(?::\d{2})?\s+to\s+(\d{4}\/\d{2}\/\d{2})\s+(\d{2}):(\d{2})(?::\d{2})?/
-    );
-    if (!match) continue;
+  if (hours <= 0 && minutes <= 0) return "Ending now";
+  if (hours === 0) return `${minutes} minutes remaining`;
+  if (minutes === 0) return `${hours} hours remaining`;
+  return `${hours} hours ${minutes} minutes remaining`;
+}
 
-    const startDate = match[2];
-    const startHour = pad2(parseInt(match[3], 10));
-    const startMin = pad2(parseInt(match[4], 10));
-    const endHour = pad2(parseInt(match[6], 10));
-    const endMin = pad2(parseInt(match[7], 10));
+// ------------- SECTION EXTRACTION -----------------
 
-    if (startDate === todayStr) {
-      intervals.push(`${startHour}:${startMin} – ${endHour}:${endMin}`);
-    }
+// Return all lines after "X details:" until the next "details:" header
+function extractSection(lines, startLabel) {
+  const startIdx = lines.findIndex((l) => l.trim().startsWith(startLabel));
+  if (startIdx === -1) return [];
+
+  const out = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (/details\s*:$/i.test(trimmed) && !trimmed.startsWith(startLabel)) break;
+    out.push(line);
   }
+  return out;
+}
 
+function getIntervalsFromSection(sectionLines) {
+  const intervals = [];
+  for (const raw of sectionLines) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.toLowerCase().startsWith("next ")) continue;
+    const iv = parseIntervalLine(line);
+    if (iv) intervals.push(iv);
+  }
   return intervals;
 }
 
-// Fill a set of DOM fields for one city + section
-function renderSection(cityId, sectionName, data, offsetMinutes, nowUtcMs) {
-  const { current, next } = data;
-  const base = `${cityId}-${sectionName}`;
+// ------------- CITY PROCESSING -----------------
 
-  const currentEl = document.getElementById(`${base}-current`);
-  const remainingEl = document.getElementById(`${base}-remaining`);
-  const nextEl = document.getElementById(`${base}-next`);
+async function processCity(city) {
+  const statusEl = document.getElementById(`status-${city.id}`);
+  const timeEl = document.getElementById(`time-${city.id}`);
 
-  if (!currentEl || !remainingEl || !nextEl) return;
+  // Local time in this city's zone at the same physical instant
+  const nowZoned = getNowInZone(city.timeZone);
 
-  if (!current) {
-    currentEl.textContent = "Not in range";
-    remainingEl.textContent = "–";
-  } else {
-    currentEl.textContent = current.name;
-    const remainingMs = current.endUtc - nowUtcMs;
-    remainingEl.textContent = formatRemaining(remainingMs);
+  if (timeEl) {
+    timeEl.textContent = "Local time here: " + formatDateTimeWithSeconds(nowZoned);
   }
 
-  if (!next) {
-    nextEl.textContent = "–";
-  } else {
-    const startStr = formatCityDateTime(next.startUtc, offsetMinutes);
-    nextEl.textContent = `${next.name} (starts: ${startStr})`;
+  try {
+    const res = await fetch(city.file);
+    if (!res.ok) {
+      throw new Error(`Could not load ${city.file}`);
+    }
+    const text = await res.text();
+    const lines = text.split(/\r?\n/);
+
+    const tithiSection = extractSection(lines, "Thithi details");
+    const nakSection = extractSection(lines, "Nakshatram details");
+    const yogaSection = extractSection(lines, "Yogam details");
+    const karSection = extractSection(lines, "Karanam details");
+
+    const tithiIntervals = getIntervalsFromSection(tithiSection);
+    const nakIntervals = getIntervalsFromSection(nakSection);
+    const yogaIntervals = getIntervalsFromSection(yogaSection);
+    const karIntervals = getIntervalsFromSection(karSection);
+
+    // Tithi
+    const { current: tCur, next: tNext } = findCurrentAndNext(
+      tithiIntervals,
+      nowZoned
+    );
+    document.getElementById(`tithi-current-${city.id}`).textContent = tCur
+      ? tCur.name
+      : "Not in range";
+    document.getElementById(`tithi-remaining-${city.id}`).textContent = tCur
+      ? formatTimeRemaining(tCur.end, nowZoned)
+      : "";
+    document.getElementById(`tithi-next-${city.id}`).textContent = tNext
+      ? `${tNext.name} (starts: ${formatDateTime(tNext.start)})`
+      : "–";
+
+    // Nakshatra
+    const { current: nCur, next: nNext } = findCurrentAndNext(
+      nakIntervals,
+      nowZoned
+    );
+    document.getElementById(`nak-current-${city.id}`).textContent = nCur
+      ? nCur.name
+      : "Not in range";
+    document.getElementById(`nak-remaining-${city.id}`).textContent = nCur
+      ? formatTimeRemaining(nCur.end, nowZoned)
+      : "";
+    document.getElementById(`nak-next-${city.id}`).textContent = nNext
+      ? `${nNext.name} (starts: ${formatDateTime(nNext.start)})`
+      : "–";
+
+    // Yogam
+    const { current: yCur, next: yNext } = findCurrentAndNext(
+      yogaIntervals,
+      nowZoned
+    );
+    document.getElementById(`yoga-current-${city.id}`).textContent = yCur
+      ? yCur.name
+      : "Not in range";
+    document.getElementById(`yoga-remaining-${city.id}`).textContent = yCur
+      ? formatTimeRemaining(yCur.end, nowZoned)
+      : "";
+    document.getElementById(`yoga-next-${city.id}`).textContent = yNext
+      ? `${yNext.name} (starts: ${formatDateTime(yNext.start)})`
+      : "–";
+
+    // Karanam
+    const { current: kCur, next: kNext } = findCurrentAndNext(
+      karIntervals,
+      nowZoned
+    );
+    document.getElementById(`karana-current-${city.id}`).textContent = kCur
+      ? kCur.name
+      : "Not in range";
+    document.getElementById(`karana-remaining-${city.id}`).textContent = kCur
+      ? formatTimeRemaining(kCur.end, nowZoned)
+      : "";
+    document.getElementById(`karana-next-${city.id}`).textContent = kNext
+      ? `${kNext.name} (starts: ${formatDateTime(kNext.start)})`
+      : "–";
+
+    if (statusEl) {
+      statusEl.textContent = `Panchangam loaded from ${city.file}`;
+    }
+  } catch (err) {
+    console.error(err);
+    if (statusEl) {
+      statusEl.textContent = `Error loading ${city.file}. Check console.`;
+    }
   }
 }
 
-// Fill Rahu Kalam section for one city
-function renderKalas(cityId, kalasByName) {
-  const ids = {
-    rahukala: `${cityId}-kala-rahukala`,
-    yamaganda: `${cityId}-kala-yamaganda`,
-    durmuhurtha: `${cityId}-kala-durmuhurtha`,
-    varjyam: `${cityId}-kala-varjyam`,
-  };
+// ------------- USER CITY DETECTION -----------------
 
-  for (const [key, elId] of Object.entries(ids)) {
-    const el = document.getElementById(elId);
-    if (!el) continue;
-    const arr = kalasByName[key] || [];
-    el.textContent = arr.length ? arr.join(", ") : "–";
-  }
+function highlightUserCity() {
+  const userTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  CITY_CONFIG.forEach((city) => {
+    const el = document.getElementById(`you-here-${city.id}`);
+    if (!el) return;
+
+    if (city.timeZone === userTZ) {
+      el.textContent = "You are here!";
+    } else {
+      el.textContent = "";
+    }
+  });
 }
 
-// --- Main loading logic -----------------------------------------------
+// ------------- BROWSER TIME DISPLAY -----------------
 
 function updateBrowserTime() {
   const el = document.getElementById("browser-time");
   if (!el) return;
   const now = new Date();
-  el.textContent = now.toLocaleString();
+  el.textContent =
+    "Current time (your browser): " + formatLocalDateTimeWithSeconds(now);
 }
 
-async function loadCity(city) {
-  try {
-    const resp = await fetch(city.file);
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const text = await resp.text();
+// ------------- MAIN -----------------
 
-    const nowUtcMs = Date.now();
-
-    // Panchanga sections
-    const thithiSec = extractSection(text, "Thithi");
-    const nakshSec = extractSection(text, "Nakshatram");
-    const yogSec = extractSection(text, "Yogam");
-    const karSec = extractSection(text, "Karanam");
-
-    const thithiEntries = parseIntervals(thithiSec, city.utcOffsetMinutes);
-    const nakshEntries = parseIntervals(nakshSec, city.utcOffsetMinutes);
-    const yogEntries = parseIntervals(yogSec, city.utcOffsetMinutes);
-    const karEntries = parseIntervals(karSec, city.utcOffsetMinutes);
-
-    renderSection(
-      city.id,
-      "tithi",
-      findCurrentAndNext(thithiEntries, nowUtcMs),
-      city.utcOffsetMinutes,
-      nowUtcMs
-    );
-    renderSection(
-      city.id,
-      "nakshatra",
-      findCurrentAndNext(nakshEntries, nowUtcMs),
-      city.utcOffsetMinutes,
-      nowUtcMs
-    );
-    renderSection(
-      city.id,
-      "yogam",
-      findCurrentAndNext(yogEntries, nowUtcMs),
-      city.utcOffsetMinutes,
-      nowUtcMs
-    );
-    renderSection(
-      city.id,
-      "karanam",
-      findCurrentAndNext(karEntries, nowUtcMs),
-      city.utcOffsetMinutes,
-      nowUtcMs
-    );
-
-    // Kalas
-    const rahuSec = extractSection(text, "Rahukala");
-    const yamaSec = extractSection(text, "Yamaganda");
-    const durmSec = extractSection(text, "Durmuhurtha");
-    const varjSec = extractSection(text, "Varjyam");
-
-    const kalasByName = {
-      rahukala: rahuSec
-        ? parseKalasForToday(rahuSec, city.utcOffsetMinutes, nowUtcMs)
-        : [],
-      yamaganda: yamaSec
-        ? parseKalasForToday(yamaSec, city.utcOffsetMinutes, nowUtcMs)
-        : [],
-      durmuhurtha: durmSec
-        ? parseKalasForToday(durmSec, city.utcOffsetMinutes, nowUtcMs)
-        : [],
-      varjyam: varjSec
-        ? parseKalasForToday(varjSec, city.utcOffsetMinutes, nowUtcMs)
-        : [],
-    };
-
-    renderKalas(city.id, kalasByName);
-  } catch (err) {
-    console.error("Failed to load city", city.id, err);
-  }
-}
-
-// Initialise
-document.addEventListener("DOMContentLoaded", () => {
+function main() {
   updateBrowserTime();
-  // Refresh browser time every minute so it stays roughly current
-  setInterval(updateBrowserTime, 60 * 1000);
+  setInterval(updateBrowserTime, 1000); // optional: live ticking clock
 
-  cities.forEach(loadCity);
-});
+  CITY_CONFIG.forEach((city) => {
+    processCity(city);
+  });
+
+  highlightUserCity();
+}
+
+main();
