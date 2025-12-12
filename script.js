@@ -1,279 +1,246 @@
-// Multi-City Panchangam – Option A logic
-// 1) Detect where the user is (Portland, Boston, Chennai) using time zone
-// 2) Load THAT city's Panchangam file only
-// 3) Use that single file to compute all 3 columns, using each city's local time
+// Multi-city Panchangam viewer using a single Portland Panchangam file
+// Works with panchangam_Portland.txt as you uploaded.
 
-const cities = {
-  portland: {
+const CITY_CONFIG = [
+  {
     id: "portland",
-    displayName: "Portland, OR – USA",
-    timeZone: "America/Los_Angeles",
-    fileName: "panchangam_Portland.txt"
+    label: "Portland, OR – USA",
+    utcOffsetMinutes: -8 * 60,   // PST
   },
-  boston: {
+  {
     id: "boston",
-    displayName: "Boston, MA – USA",
-    timeZone: "America/New_York",
-    fileName: "panchangam_Boston.txt"
+    label: "Boston, MA – USA",
+    utcOffsetMinutes: -5 * 60,   // EST
   },
-  chennai: {
+  {
     id: "chennai",
-    displayName: "Chennai, India",
-    timeZone: "Asia/Kolkata",
-    fileName: "panchangam_Chennai.txt"
+    label: "Chennai, India",
+    utcOffsetMinutes: 5.5 * 60,  // IST
+  },
+];
+
+// Section titles as they appear in the text file
+const SECTION_TITLES = [
+  "Thithi details:",
+  "Nakshatram details:",
+  "Yogam details:",
+  "Karanam details:",
+  "Rahukala details:",
+  "Yamaganda details:",
+  "Durmuhurtha details:",
+  "Varjyam details:",
+];
+
+// -------------------- Utility functions --------------------
+
+function formatDateTime(dt) {
+  const months = [
+    "jan","feb","mar","apr","may","jun",
+    "jul","aug","sep","oct","nov","dec"
+  ];
+  const y = dt.getUTCFullYear();
+  const m = months[dt.getUTCMonth()];
+  const d = String(dt.getUTCDate()).padStart(2, "0");
+  const hh = String(dt.getUTCHours()).padStart(2, "0");
+  const mm = String(dt.getUTCMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
+function formatLocalDateTime(dt, utcOffsetMinutes) {
+  // show in that city's local clock
+  const ms = dt.getTime() + utcOffsetMinutes * 60 * 1000;
+  const local = new Date(ms);
+  const months = [
+    "jan","feb","mar","apr","may","jun",
+    "jul","aug","sep","oct","nov","dec"
+  ];
+  const y = local.getUTCFullYear();
+  const m = months[local.getUTCMonth()];
+  const d = String(local.getUTCDate()).padStart(2, "0");
+  const hh = String(local.getUTCHours()).padStart(2, "0");
+  const mm = String(local.getUTCMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
+function formatRemaining(msDiff) {
+  if (!Number.isFinite(msDiff)) return "";
+  if (msDiff < 0) return "Already ended";
+  const totalMinutes = Math.floor(msDiff / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours} hours ${minutes} minutes remaining`;
+}
+
+// Convert a Portland-local timestamp "YYYY/MM/DD HH:MM" to a UTC Date
+function parsePortlandTimeToUTC(str) {
+  const [datePart, timePart] = str.split(" ");
+  const [yy, mm, dd] = datePart.split("/").map(Number);
+  const [hh, min] = timePart.split(":").map(Number);
+
+  // Portland in December is PST (UTC-8).
+  const portlandOffset = -8 * 60; // minutes from UTC
+  // We create a UTC timestamp equal to that local wall-clock time.
+  const utcMs = Date.UTC(yy, mm - 1, dd, hh - portlandOffset / 60, min);
+  return new Date(utcMs);
+}
+
+// Extract the text block for a section
+function getSectionText(fileText, sectionTitle) {
+  const start = fileText.indexOf(sectionTitle);
+  if (start === -1) return "";
+
+  let end = fileText.length;
+  for (const title of SECTION_TITLES) {
+    if (title === sectionTitle) continue;
+    const pos = fileText.indexOf(title, start + sectionTitle.length);
+    if (pos !== -1 && pos < end) end = pos;
   }
-};
-
-const monthNamesShort = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-
-// ---------- Utility helpers ----------
-
-function detectUserCity() {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-
-  if (tz === "America/Los_Angeles" || tz === "US/Pacific") return "portland";
-  if (tz === "America/New_York" || tz === "US/Eastern") return "boston";
-  if (tz === "Asia/Kolkata") return "chennai";
-
-  // Default to Portland if we cannot recognize
-  return "portland";
+  return fileText.slice(start + sectionTitle.length, end);
 }
 
-function formatDisplayFromParts({ year, month, day, hour, minute }) {
-  const mStr = monthNamesShort[month - 1] || "???";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${year}-${mStr}-${pad(day)} ${pad(hour)}:${pad(minute)}`;
-}
+// Parse intervals from a section: "Name: YYYY/MM/DD HH:MM to YYYY/MM/DD HH:MM"
+function parseIntervals(sectionText) {
+  const lines = sectionText.split("\n");
+  const pattern =
+    /^(.+?):\s+(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}) to (\d{4}\/\d{2}\/\d{2} \d{2}:\d{2})$/;
 
-function formatDisplayFromString(dateTimeStr) {
-  // Input: "2025/12/12 01:27"
-  const [d, t] = dateTimeStr.split(" ");
-  const [year, month, day] = d.split("/").map(Number);
-  const [hour, minute] = t.split(":").map(Number);
-  return formatDisplayFromParts({ year, month, day, hour, minute });
-}
-
-function getLocalPartsForTimeZone(baseDate, timeZone) {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  });
-
-  const parts = fmt.formatToParts(baseDate);
-  const lookup = {};
-  for (const p of parts) {
-    lookup[p.type] = p.value;
-  }
-
-  return {
-    year: Number(lookup.year),
-    month: Number(lookup.month),
-    day: Number(lookup.day),
-    hour: Number(lookup.hour),
-    minute: Number(lookup.minute),
-    second: Number(lookup.second)
-  };
-}
-
-function serialFromParts({ year, month, day, hour, minute }) {
-  // Arbitrary UTC-based serial; good for comparisons within the same "local" scale
-  return Date.UTC(year, month - 1, day, hour, minute);
-}
-
-function serialFromString(dateTimeStr) {
-  const [d, t] = dateTimeStr.split(" ");
-  const [year, month, day] = d.split("/").map(Number);
-  const [hour, minute] = t.split(":").map(Number);
-  return serialFromParts({ year, month, day, hour, minute });
-}
-
-// ---------- Panchangam parsing ----------
-
-function extractSection(text, header) {
-  const regex = new RegExp(`${header}\\s+details:[\\s\\S]*?(?=\\n[A-Za-z ]+details:|$)`, "i");
-  const match = text.match(regex);
-  return match ? match[0] : "";
-}
-
-function parseItemsFromSection(sectionText) {
-  const linesRegex = /^([A-Za-z\/]+):\s+(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2})\s+to\s+(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2})/gm;
-  const items = [];
-  let m;
-  while ((m = linesRegex.exec(sectionText)) !== null) {
+  const intervals = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(pattern);
+    if (!m) continue;
     const name = m[1].trim();
-    const startStr = m[2].trim();
-    const endStr = m[3].trim();
-
-    items.push({
-      name,
-      startStr,
-      endStr,
-      startSerial: serialFromString(startStr),
-      endSerial: serialFromString(endStr)
-    });
+    const startUTC = parsePortlandTimeToUTC(m[2]);
+    const endUTC = parsePortlandTimeToUTC(m[3]);
+    intervals.push({ name, startUTC, endUTC });
   }
-
-  // Add "next" info for convenience
-  for (let i = 0; i < items.length; i++) {
-    const next = items[i + 1] || null;
-    items[i].nextName = next ? next.name : null;
-    items[i].nextStartStr = next ? next.startStr : null;
-    items[i].nextStartSerial = next ? next.startSerial : null;
-  }
-
-  return items;
+  return intervals;
 }
 
-function parsePanchangamText(text) {
-  const thithiSection = extractSection(text, "Thithi");
-  const nakshatraSection = extractSection(text, "Nakshatram") || extractSection(text, "Nakshatra");
-  const yogamSection = extractSection(text, "Yogam");
-  const karanamSection = extractSection(text, "Karanam");
-
-  return {
-    tithi: parseItemsFromSection(thithiSection),
-    nakshatra: parseItemsFromSection(nakshatraSection),
-    yogam: parseItemsFromSection(yogamSection),
-    karanam: parseItemsFromSection(karanamSection)
-  };
-}
-
-// ---------- Rendering logic ----------
-
-function setText(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
-
-function describeRemainingMinutes(totalMinutes) {
-  if (!isFinite(totalMinutes) || totalMinutes < 0) return "–";
-
-  const minutes = Math.round(totalMinutes);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-
-  const hStr = h === 1 ? "1 hour" : `${h} hours`;
-  const mStr = m === 1 ? "1 minute" : `${m} minutes`;
-
-  if (h === 0) return `${mStr} remaining`;
-  if (m === 0) return `${hStr} remaining`;
-  return `${hStr} ${mStr} remaining`;
-}
-
-function updateCategoryForCity(cityId, categoryName, items, nowSerial) {
-  const curId = `${categoryName}-current-${cityId}`;
-  const remId = `${categoryName}-remaining-${cityId}`;
-  const nextId = `${categoryName}-next-${cityId}`;
-
-  if (!items || items.length === 0) {
-    setText(curId, "–");
-    setText(remId, "–");
-    setText(nextId, "–");
-    return;
-  }
-
+// For a given UTC "now", find current & next interval
+function findCurrentAndNext(intervals, nowUTC) {
   let current = null;
-  for (const item of items) {
-    if (nowSerial >= item.startSerial && nowSerial < item.endSerial) {
-      current = item;
-      break;
+  let next = null;
+
+  for (const iv of intervals) {
+    if (iv.startUTC <= nowUTC && nowUTC < iv.endUTC) {
+      current = iv;
+    }
+    if (iv.startUTC > nowUTC) {
+      if (!next || iv.startUTC < next.startUTC) next = iv;
     }
   }
+  return { current, next };
+}
 
-  if (!current) {
-    setText(curId, "Not in range");
-    setText(remId, "–");
-    setText(nextId, "–");
+// -------------------- Rendering logic --------------------
+
+async function main() {
+  const browserNow = new Date();
+  const utcNow = new Date(
+    browserNow.getTime() + browserNow.getTimezoneOffset() * 60000
+  );
+
+  // Browser time display
+  const browserTimeEl = document.getElementById("browserTime");
+  if (browserTimeEl) {
+    browserTimeEl.textContent = formatDateTime(utcNow);
+  }
+
+  // "You are here!" detection
+  const viewerUtcOffset = -browserNow.getTimezoneOffset(); // in minutes
+
+  CITY_CONFIG.forEach((city) => {
+    const localStr = formatLocalDateTime(utcNow, city.utcOffsetMinutes);
+    const localEl = document.getElementById(`${city.id}LocalTime`);
+    if (localEl) localEl.textContent = `Local time here: ${localStr}`;
+
+    const hereEl = document.getElementById(`${city.id}Here`);
+    if (hereEl) {
+      const diff = Math.abs(viewerUtcOffset - city.utcOffsetMinutes);
+      if (diff <= 30) {
+        hereEl.textContent = "You are here!";
+      } else {
+        hereEl.textContent = "";
+      }
+    }
+  });
+
+  // Load Panchangam file (Portland)
+  let txt;
+  try {
+    const resp = await fetch("panchangam_Portland.txt");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    txt = await resp.text();
+  } catch (err) {
+    console.error("Error loading Panchangam file:", err);
+    CITY_CONFIG.forEach((city) => {
+      const errEl = document.getElementById(`${city.id}-error`);
+      if (errEl) errEl.textContent = "Error loading Panchangam file.";
+    });
     return;
   }
 
-  setText(curId, current.name);
+  // Parse all four sections once
+  const tithiIntervals = parseIntervals(
+    getSectionText(txt, "Thithi details:")
+  );
+  const nakshatraIntervals = parseIntervals(
+    getSectionText(txt, "Nakshatram details:")
+  );
+  const yogamIntervals = parseIntervals(
+    getSectionText(txt, "Yogam details:")
+  );
+  const karanamIntervals = parseIntervals(
+    getSectionText(txt, "Karanam details:")
+  );
 
-  const remainingMinutes = (current.endSerial - nowSerial) / 60000;
-  setText(remId, describeRemainingMinutes(remainingMinutes));
+  // Sanity-log to console for debugging if needed
+  console.log("Tithi intervals:", tithiIntervals.length);
+  console.log("Nakshatra intervals:", nakshatraIntervals.length);
+  console.log("Yogam intervals:", yogamIntervals.length);
+  console.log("Karanam intervals:", karanamIntervals.length);
 
-  if (current.nextName && current.nextStartStr) {
-    setText(nextId, `${current.nextName} (starts: ${formatDisplayFromString(current.nextStartStr)})`);
-  } else {
-    setText(nextId, "–");
-  }
-}
+  // For each city, we use the same UTC "now" to decide current / next,
+  // but we show the start/end timestamps in that city's local time.
+  CITY_CONFIG.forEach((city) => {
+    const baseUtcOffset = city.utcOffsetMinutes;
 
-function updateAllCities(panchangData, baseDate) {
-  // 1. Browser time display
-  const browserParts = getLocalPartsForTimeZone(baseDate, Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
-  setText("browser-time", formatDisplayFromParts(browserParts));
+    function renderBlock(kind, intervals) {
+      const { current, next } = findCurrentAndNext(intervals, utcNow);
 
-  // 2. For each city, compute local time and fill
-  Object.values(cities).forEach((city) => {
-    const parts = getLocalPartsForTimeZone(baseDate, city.timeZone);
-    const serial = serialFromParts(parts);
+      const curSpan = document.getElementById(`${city.id}-${kind}-current`);
+      const remSpan = document.getElementById(`${city.id}-${kind}-remaining`);
+      const nextSpan = document.getElementById(`${city.id}-${kind}-next`);
 
-    setText(`localtime-${city.id}`, `Local time here: ${formatDisplayFromParts(parts)}`);
+      if (!curSpan || !remSpan || !nextSpan) return;
 
-    updateCategoryForCity(city.id, "tithi", panchangData.tithi, serial);
-    updateCategoryForCity(city.id, "nakshatra", panchangData.nakshatra, serial);
-    updateCategoryForCity(city.id, "yogam", panchangData.yogam, serial);
-    updateCategoryForCity(city.id, "karanam", panchangData.karanam, serial);
+      if (!current) {
+        curSpan.textContent = "Not in range";
+        remSpan.textContent = "";
+      } else {
+        curSpan.textContent = current.name;
+        const remainingMs = current.endUTC.getTime() - utcNow.getTime();
+        remSpan.textContent = formatRemaining(remainingMs);
+      }
+
+      if (!next) {
+        nextSpan.textContent = "–";
+      } else {
+        const localStartStr = formatLocalDateTime(
+          next.startUTC,
+          baseUtcOffset
+        );
+        nextSpan.textContent = `${next.name} (starts: ${localStartStr})`;
+      }
+    }
+
+    renderBlock("tithi", tithiIntervals);
+    renderBlock("nakshatra", nakshatraIntervals);
+    renderBlock("yogam", yogamIntervals);
+    renderBlock("karanam", karanamIntervals);
   });
 }
 
-function highlightUserCity(userCityId) {
-  ["portland", "boston", "chennai"].forEach((id) => {
-    setText(`here-${id}`, id === userCityId ? "You are here!" : "");
-  });
-}
-
-function setDataSourceLabel(userCityId) {
-  const city = cities[userCityId] || cities.portland;
-  const label = `All three columns use Panchangam data from ${city.displayName} (file: ${city.fileName}) and display it in each city's local time.`;
-  setText("data-source-label", label);
-}
-
-// ---------- Main ----------
-
-(function init() {
-  const baseDate = new Date(); // one fixed "now" for all cities
-  const userCityId = detectUserCity();
-  const city = cities[userCityId] || cities.portland;
-
-  highlightUserCity(userCityId);
-  setDataSourceLabel(userCityId);
-
-  fetch(city.fileName)
-    .then((resp) => {
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return resp.text();
-    })
-    .then((text) => {
-      const panchangData = parsePanchangamText(text);
-      updateAllCities(panchangData, baseDate);
-    })
-    .catch((err) => {
-      console.error("Error loading Panchangam file:", err);
-      ["portland", "boston", "chennai"].forEach((id) => {
-        setText(`tithi-current-${id}`, "–");
-        setText(`tithi-remaining-${id}`, "Error loading Panchangam file.");
-        setText(`tithi-next-${id}`, "–");
-
-        setText(`nakshatra-current-${id}`, "–");
-        setText(`nakshatra-remaining-${id}`, "Error loading Panchangam file.");
-        setText(`nakshatra-next-${id}`, "–");
-
-        setText(`yogam-current-${id}`, "–");
-        setText(`yogam-remaining-${id}`, "Error loading Panchangam file.");
-        setText(`yogam-next-${id}`, "–");
-
-        setText(`karanam-current-${id}`, "–");
-        setText(`karanam-remaining-${id}`, "Error loading Panchangam file.");
-        setText(`karanam-next-${id}`, "–");
-      });
-    });
-})();
-
+document.addEventListener("DOMContentLoaded", main);
