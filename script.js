@@ -25,13 +25,14 @@ function formatDateTime(date, timeZone) {
         });
         
         const parts = formatter.formatToParts(date);
-        const year = parts.find(p => p.type === 'year').value;
-        const month = MONTHS[parseInt(parts.find(p => p.type === 'month').value) - 1];
-        const day = parts.find(p => p.type === 'day').value;
-        const hour = parts.find(p => p.type === 'hour').value;
-        const minute = parts.find(p => p.type === 'minute').value;
+        const year = parts.find(function(p) { return p.type === 'year'; }).value;
+        const monthNum = parseInt(parts.find(function(p) { return p.type === 'month'; }).value);
+        const month = MONTHS[monthNum - 1];
+        const day = parts.find(function(p) { return p.type === 'day'; }).value;
+        const hour = parts.find(function(p) { return p.type === 'hour'; }).value;
+        const minute = parts.find(function(p) { return p.type === 'minute'; }).value;
         
-        return `${year}-${month}-${day} ${hour}:${minute}`;
+        return year + '-' + month + '-' + day + ' ' + hour + ':' + minute;
     } catch (e) {
         console.error('Error formatting date:', e);
         return 'Error formatting date';
@@ -61,7 +62,7 @@ function calculateRemaining(endDate, currentDate) {
     
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours} hours ${minutes} minutes`;
+    return hours + ' hours ' + minutes + ' minutes';
 }
 
 // Detect base city from browser timezone
@@ -90,7 +91,8 @@ function parseSection(text, sectionName) {
     
     for (let i = 0; i < variations.length; i++) {
         const variant = variations[i];
-        const regexPattern = variant + '\\s*details?:\\s*([\\s\\S]*?)(?=\\n\\n[A-Z]|$)';
+        // Match section header followed by optional === line
+        const regexPattern = variant + '\\s*details?:\\s*\\n=*\\s*\\n([\\s\\S]*?)(?=\\n\\n[A-Z]|$)';
         const regex = new RegExp(regexPattern, 'i');
         const match = text.match(regex);
         if (match) {
@@ -101,11 +103,13 @@ function parseSection(text, sectionName) {
     
     if (!sectionText) return [];
     
-    const lines = sectionText.split('\n').filter(line => line.trim());
+    const lines = sectionText.split('\n');
     const intervals = [];
     
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+        const line = lines[i].trim();
+        if (!line || line.match(/^=+$/)) continue; // Skip empty lines and === lines
+        
         const colonIndex = line.indexOf(':');
         if (colonIndex === -1) continue;
         
@@ -162,7 +166,7 @@ async function loadPanchangam(city) {
         
         return {
             tithi: parseSection(text, 'Thithi'),
-            nakshatram: parseSection(text, 'Nakshatram'),
+            nakshatram: parseSection(text, 'Nakshatra'),
             yogam: parseSection(text, 'Yogam'),
             karanam: parseSection(text, 'Karanam'),
             rahukala: parseSection(text, 'Rahukala'),
@@ -260,6 +264,7 @@ async function init() {
         
         // Load panchangam data
         panchangamData = await loadPanchangam(baseCity);
+        console.log('Loaded data:', panchangamData);
         
         // Render all cities
         let gridHtml = '';
