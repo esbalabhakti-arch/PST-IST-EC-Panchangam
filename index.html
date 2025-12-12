@@ -3,181 +3,151 @@
 <head>
   <meta charset="UTF-8" />
   <title>Multi-City Chaandramaanam Panchangam</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="guru.png" />
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background-color: #f5ecda;
-      color: #3a2a13;
-      padding: 16px;
+      background: #f8f1e3;
+      color: #3a2a1a;
+      padding: 24px;
     }
-
-    .app-container {
+    .app-shell {
       max-width: 1200px;
       margin: 0 auto;
     }
-
     header {
       display: flex;
       align-items: center;
-      gap: 18px;
-      padding: 12px 8px 8px;
+      gap: 16px;
+      border-bottom: 4px solid #d8b256;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
     }
-
-    .logo-box {
-      width: 96px;
-      height: 96px;
-      border-radius: 20px;
-      border: 4px solid #d1a028;
-      background-color: #fff7ea;
+    .guru-logo {
+      width: 90px;
+      height: 90px;
+      border-radius: 18px;
+      border: 4px solid #d8b256;
+      background: #fff;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      flex-shrink: 0;
     }
-
-    .logo-box img {
-      max-width: 90%;
+    .guru-logo img {
+      max-width: 100%;
       height: auto;
-      display: block;
     }
-
     .title-block h1 {
       font-size: 1.8rem;
       font-weight: 700;
     }
-
     .title-block p {
-      margin-top: 4px;
       font-size: 0.9rem;
-      color: #6b4a20;
+      margin-top: 2px;
+      color: #6c5535;
     }
-
-    .top-divider {
-      margin: 12px 0 8px;
-      border: none;
-      border-top: 3px solid #d1a028;
-    }
-
-    .center-text {
+    .browser-time {
       text-align: center;
-      margin-bottom: 4px;
-      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 10px 0 2px;
     }
-
-    .center-text strong {
-      font-weight: 700;
-    }
-
-    .center-subtext {
+    .subtitle {
       text-align: center;
-      font-size: 0.8rem;
-      color: #6b4a20;
-      margin-bottom: 16px;
+      font-size: 0.85rem;
+      margin-bottom: 18px;
+      color: #6c5535;
     }
-
-    .columns-row {
-      display: flex;
-      flex-wrap: wrap;
+    .cities-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 16px;
-      justify-content: center;
     }
-
-    .city-column {
-      background-color: #fff7ea;
-      border-radius: 14px;
-      padding: 12px 14px 16px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-      flex: 1 1 320px;
-      max-width: 360px;
+    .city-card {
+      background: #fffdf8;
+      border-radius: 16px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+      padding: 16px 18px 18px;
+      border: 1px solid #ead7b3;
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
-
-    .city-header h2 {
-      font-size: 1.1rem;
-      margin-bottom: 2px;
+    .city-header {
+      border-bottom: 1px solid #e4cfaa;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
     }
-
-    .city-header .tz-label {
+    .city-name {
+      font-weight: 650;
+    }
+    .city-tz {
       font-size: 0.8rem;
-      color: #7b5b2c;
+      color: #7f6846;
     }
-
-    .city-header .you-are-here {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #c0392b;
-      margin-top: 4px;
-    }
-
-    .city-header .local-time {
+    .city-local-time {
       font-size: 0.8rem;
-      color: #422b10;
+      color: #555;
       margin-top: 2px;
     }
-
-    .card {
-      background-color: #ffffff;
-      border-radius: 10px;
+    .you-are-here {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #b04700;
+      margin-top: 2px;
+    }
+    .panch-card {
+      margin-top: 6px;
       padding: 10px 12px;
-      border: 1px solid #e0c89a;
-      min-height: 70px;
+      border-radius: 12px;
+      border: 1px solid #efe0c2;
+      background: #fffbf3;
+      font-size: 0.87rem;
     }
-
-    .card h3 {
+    .panch-card h3 {
       font-size: 0.95rem;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
-
-    .card p {
-      font-size: 0.84rem;
-      margin-bottom: 2px;
+    .line {
+      margin-top: 2px;
     }
-
     .label {
       font-weight: 600;
     }
-
+    .value-strong {
+      font-weight: 650;
+    }
     .remaining {
       font-size: 0.8rem;
-      color: #444;
+      color: #6f593c;
     }
-
-    .next-line {
-      font-size: 0.82rem;
-      margin-top: 4px;
+    .error-msg {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      color: #b00020;
     }
-
     footer {
-      text-align: center;
-      font-size: 0.76rem;
-      color: #6b4a20;
       margin-top: 18px;
+      padding-top: 8px;
+      border-top: 1px solid #e0cda9;
+      font-size: 0.8rem;
+      text-align: center;
+      color: #6c5535;
       line-height: 1.4;
     }
-
-    @media (max-width: 768px) {
-      header {
-        flex-direction: column;
-        align-items: flex-start;
+    @media (max-width: 900px) {
+      .cities-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-shell">
     <header>
-      <div class="logo-box">
-        <img src="guru.png" alt="Guru" />
+      <div class="guru-logo">
+        <img src="guru.png" alt="Guru image">
       </div>
       <div class="title-block">
         <h1>Multi-City Chaandramaanam Panchangam</h1>
@@ -185,134 +155,187 @@
       </div>
     </header>
 
-    <hr class="top-divider" />
-
-    <div class="center-text">
-      Current time (your browser): <strong id="browser-time">–</strong>
+    <div class="browser-time">
+      Current time (your browser): <span id="browserTime">–</span>
     </div>
-    <div class="center-subtext" id="data-source-label">
-      <!-- Filled by script: which city's Panchangam file is being used -->
+    <div class="subtitle">
+      All three columns use Panchangam data from Portland, OR – USA (<code>panchangam_Portland.txt</code>)
+      and display it in each city's local time.
     </div>
 
-    <div class="columns-row">
-      <!-- Portland column -->
-      <section class="city-column" id="city-portland">
+    <div class="cities-grid">
+      <!-- Portland -->
+      <section class="city-card" id="city-portland">
         <div class="city-header">
-          <h2>Portland, OR – USA</h2>
-          <div class="tz-label">Pacific Time (PST)</div>
-          <div class="you-are-here" id="here-portland"></div>
-          <div class="local-time" id="localtime-portland"></div>
+          <div class="city-name">Portland, OR – USA</div>
+          <div class="city-tz">Pacific Time (PST)</div>
+          <div class="city-local-time" id="portlandLocalTime"></div>
+          <div class="you-are-here" id="portlandHere"></div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Tithi</h3>
-          <p><span class="label">Current:</span> <span id="tithi-current-portland">–</span></p>
-          <p class="remaining" id="tithi-remaining-portland">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="tithi-next-portland">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="portland-tithi-current">–</span>
+          </div>
+          <div class="line remaining" id="portland-tithi-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="portland-tithi-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Nakshatra</h3>
-          <p><span class="label">Current:</span> <span id="nakshatra-current-portland">–</span></p>
-          <p class="remaining" id="nakshatra-remaining-portland">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="nakshatra-next-portland">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="portland-nakshatra-current">–</span>
+          </div>
+          <div class="line remaining" id="portland-nakshatra-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="portland-nakshatra-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Yogam</h3>
-          <p><span class="label">Current:</span> <span id="yogam-current-portland">–</span></p>
-          <p class="remaining" id="yogam-remaining-portland">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="yogam-next-portland">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="portland-yogam-current">–</span>
+          </div>
+          <div class="line remaining" id="portland-yogam-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="portland-yogam-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Karanam</h3>
-          <p><span class="label">Current:</span> <span id="karanam-current-portland">–</span></p>
-          <p class="remaining" id="karanam-remaining-portland">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="karanam-next-portland">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="portland-karanam-current">–</span>
+          </div>
+          <div class="line remaining" id="portland-karanam-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="portland-karanam-next">–</span>
+          </div>
         </div>
+
+        <div class="error-msg" id="portland-error"></div>
       </section>
 
-      <!-- Boston column -->
-      <section class="city-column" id="city-boston">
+      <!-- Boston -->
+      <section class="city-card" id="city-boston">
         <div class="city-header">
-          <h2>Boston, MA – USA</h2>
-          <div class="tz-label">Eastern Time (EST)</div>
-          <div class="you-are-here" id="here-boston"></div>
-          <div class="local-time" id="localtime-boston"></div>
+          <div class="city-name">Boston, MA – USA</div>
+          <div class="city-tz">Eastern Time (EST)</div>
+          <div class="city-local-time" id="bostonLocalTime"></div>
+          <div class="you-are-here" id="bostonHere"></div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Tithi</h3>
-          <p><span class="label">Current:</span> <span id="tithi-current-boston">–</span></p>
-          <p class="remaining" id="tithi-remaining-boston">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="tithi-next-boston">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="boston-tithi-current">–</span>
+          </div>
+          <div class="line remaining" id="boston-tithi-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="boston-tithi-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Nakshatra</h3>
-          <p><span class="label">Current:</span> <span id="nakshatra-current-boston">–</span></p>
-          <p class="remaining" id="nakshatra-remaining-boston">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="nakshatra-next-boston">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="boston-nakshatra-current">–</span>
+          </div>
+          <div class="line remaining" id="boston-nakshatra-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="boston-nakshatra-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Yogam</h3>
-          <p><span class="label">Current:</span> <span id="yogam-current-boston">–</span></p>
-          <p class="remaining" id="yogam-remaining-boston">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="yogam-next-boston">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="boston-yogam-current">–</span>
+          </div>
+          <div class="line remaining" id="boston-yogam-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="boston-yogam-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Karanam</h3>
-          <p><span class="label">Current:</span> <span id="karanam-current-boston">–</span></p>
-          <p class="remaining" id="karanam-remaining-boston">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="karanam-next-boston">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="boston-karanam-current">–</span>
+          </div>
+          <div class="line remaining" id="boston-karanam-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="boston-karanam-next">–</span>
+          </div>
         </div>
+
+        <div class="error-msg" id="boston-error"></div>
       </section>
 
-      <!-- Chennai column -->
-      <section class="city-column" id="city-chennai">
+      <!-- Chennai -->
+      <section class="city-card" id="city-chennai">
         <div class="city-header">
-          <h2>Chennai, India</h2>
-          <div class="tz-label">Indian Standard Time (IST)</div>
-          <div class="you-are-here" id="here-chennai"></div>
-          <div class="local-time" id="localtime-chennai"></div>
+          <div class="city-name">Chennai, India</div>
+          <div class="city-tz">Indian Standard Time (IST)</div>
+          <div class="city-local-time" id="chennaiLocalTime"></div>
+          <div class="you-are-here" id="chennaiHere"></div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Tithi</h3>
-          <p><span class="label">Current:</span> <span id="tithi-current-chennai">–</span></p>
-          <p class="remaining" id="tithi-remaining-chennai">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="tithi-next-chennai">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="chennai-tithi-current">–</span>
+          </div>
+          <div class="line remaining" id="chennai-tithi-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="chennai-tithi-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Nakshatra</h3>
-          <p><span class="label">Current:</span> <span id="nakshatra-current-chennai">–</span></p>
-          <p class="remaining" id="nakshatra-remaining-chennai">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="nakshatra-next-chennai">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="chennai-nakshatra-current">–</span>
+          </div>
+          <div class="line remaining" id="chennai-nakshatra-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="chennai-nakshatra-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Yogam</h3>
-          <p><span class="label">Current:</span> <span id="yogam-current-chennai">–</span></p>
-          <p class="remaining" id="yogam-remaining-chennai">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="yogam-next-chennai">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="chennai-yogam-current">–</span>
+          </div>
+          <div class="line remaining" id="chennai-yogam-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="chennai-yogam-next">–</span>
+          </div>
         </div>
 
-        <div class="card">
+        <div class="panch-card">
           <h3>Karanam</h3>
-          <p><span class="label">Current:</span> <span id="karanam-current-chennai">–</span></p>
-          <p class="remaining" id="karanam-remaining-chennai">–</p>
-          <p class="next-line"><span class="label">Next:</span> <span id="karanam-next-chennai">–</span></p>
+          <div class="line"><span class="label">Current:</span>
+            <span class="value-strong" id="chennai-karanam-current">–</span>
+          </div>
+          <div class="line remaining" id="chennai-karanam-remaining"></div>
+          <div class="line"><span class="label">Next:</span>
+            <span id="chennai-karanam-next">–</span>
+          </div>
         </div>
+
+        <div class="error-msg" id="chennai-error"></div>
       </section>
     </div>
 
     <footer>
-      <div>Date display uses format <strong>YYYY-mmm-DD HH:MM</strong> (e.g., 2025-dec-12 09:51).</div>
-      <div>"You are here!" is based on your browser's detected time zone.</div>
+      Date display uses format <strong>YYYY-mmm-DD HH:MM</strong><br>
+      “You are here!” is based on your browser’s detected time zone.
     </footer>
   </div>
 
