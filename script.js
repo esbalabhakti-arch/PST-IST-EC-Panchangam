@@ -9,7 +9,7 @@ const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', '
 
 // Global state
 let baseCity = null;
-let panchangamData = null;
+let panchangamDataByCity = {};
 
 // Utility: Format date to YYYY-mmm-DD HH:MM
 function formatDateTime(date, timeZone) {
@@ -37,6 +37,23 @@ function formatDateTime(date, timeZone) {
         console.error('Error formatting date:', e);
         return 'Error formatting date';
     }
+}
+
+// Utility: Get date only in YYYY-MM-DD format for matching
+function getDateOnly(date, timeZone) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: timeZone
+    });
+    
+    const parts = formatter.formatToParts(date);
+    const year = parts.find(function(p) { return p.type === 'year'; }).value;
+    const month = parts.find(function(p) { return p.type === 'month'; }).value;
+    const day = parts.find(function(p) { return p.type === 'day'; }).value;
+    
+    return year + '-' + month + '-' + day;
 }
 
 // Utility: Parse timestamp from file (YYYY/MM/DD HH:MM)
@@ -86,29 +103,41 @@ function detectBaseCity() {
 
 // Parse a section from panchangam text
 function parseSection(text, sectionName) {
-    const variations = [sectionName, sectionName.replace('Nakshatram', 'Nakshatra')];
-    let sectionText = '';
+    const variations = [
+        sectionName + ' details:',
+        sectionName.replace('Nakshatram', 'Nakshatra') + ' details:',
+        sectionName + ' detail:',
+        sectionName.replace('Nakshatram', 'Nakshatra') + ' detail:'
+    ];
+    
+    let startIndex = -1;
+    let usedVariant = '';
     
     for (let i = 0; i < variations.length; i++) {
-        const variant = variations[i];
-        // Match section header followed by optional === line
-        const regexPattern = variant + '\\s*details?:\\s*\\n=*\\s*\\n([\\s\\S]*?)(?=\\n\\n[A-Z]|$)';
-        const regex = new RegExp(regexPattern, 'i');
-        const match = text.match(regex);
-        if (match) {
-            sectionText = match[1];
+        const idx = text.indexOf(variations[i]);
+        if (idx !== -1) {
+            startIndex = idx;
+            usedVariant = variations[i];
             break;
         }
     }
     
-    if (!sectionText) return [];
+    if (startIndex === -1) {
+        return [];
+    }
     
+    const afterHeader = text.substring(startIndex + usedVariant.length);
+    const nextSectionMatch = afterHeader.match(/\n\n[A-Z][a-z]+\s+details?:/);
+    const endIndex = nextSectionMatch ? nextSectionMatch.index : afterHeader.length;
+    
+    const sectionText = afterHeader.substring(0, endIndex);
     const lines = sectionText.split('\n');
     const intervals = [];
     
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
-        if (!line || line.match(/^=+$/)) continue; // Skip empty lines and === lines
+        
+        if (!line || line.match(/^=+$/)) continue;
         
         const colonIndex = line.indexOf(':');
         if (colonIndex === -1) continue;
@@ -144,7 +173,6 @@ function findCurrentAndNext(intervals, now) {
         }
     }
     
-    // If not found, return first or last
     if (intervals.length > 0) {
         if (now < intervals[0].start) {
             return { current: null, next: intervals[0] };
@@ -154,6 +182,24 @@ function findCurrentAndNext(intervals, now) {
     }
     
     return { current: null, next: null };
+}
+
+// Find inauspicious times for a specific date
+function findInauspiciousForDate(intervals, targetDate) {
+    const result = [];
+    
+    for (let i = 0; i < intervals.length; i++) {
+        const interval = intervals[i];
+        const intervalDate = interval.start.getFullYear() + '-' + 
+                            String(interval.start.getMonth() + 1).padStart(2, '0') + '-' + 
+                            String(interval.start.getDate()).padStart(2, '0');
+        
+        if (intervalDate === targetDate) {
+            result.push(interval);
+        }
+    }
+    
+    return result;
 }
 
 // Load and parse panchangam file
@@ -166,7 +212,7 @@ async function loadPanchangam(city) {
         
         return {
             tithi: parseSection(text, 'Thithi'),
-            nakshatram: parseSection(text, 'Nakshatra'),
+            nakshatram: parseSection(text, 'Nakshatram'),
             yogam: parseSection(text, 'Yogam'),
             karanam: parseSection(text, 'Karanam'),
             rahukala: parseSection(text, 'Rahukala'),
@@ -208,11 +254,36 @@ function renderSection(title, intervals, nowBase, cityTimeZone, isInauspicious) 
     return html;
 }
 
+// Render inauspicious times section for specific city
+function renderInauspiciousSection(title, intervals, cityTimeZone) {
+    if (intervals.length === 0) return '';
+    
+    let html = '<div class="section inauspicious-section">';
+    html += '<div class="section-title">' + title + '</div>';
+    html += '<div class="section-content">';
+    
+    for (let i = 0; i < intervals.length; i++) {
+        const interval = intervals[i];
+        const startStr = formatDateTime(interval.start, cityTimeZone);
+        const endStr = formatDateTime(interval.end, cityTimeZone);
+        html += '<div class="current-item">' + interval.label + '</div>';
+        html += '<div class="next-item">' + startStr + ' to ' + endStr + '</div>';
+        if (i < intervals.length - 1) html += '<br>';
+    }
+    
+    html += '</div></div>';
+    return html;
+}
+
 // Render city column
 function renderCity(cityName, isBase) {
     const config = CITIES[cityName];
     const nowBase = new Date();
     const cityLocalTime = formatDateTime(nowBase, config.timeZone);
+    const cityDate = getDateOnly(nowBase, config.timeZone);
+    
+    const basePanchangam = panchangamDataByCity[baseCity];
+    const cityPanchangam = panchangamDataByCity[cityName];
     
     let html = '<div class="city-column">';
     html += '<div class="city-header">';
@@ -225,24 +296,29 @@ function renderCity(cityName, isBase) {
     
     html += '<div class="local-time">Local time here: ' + cityLocalTime + '</div>';
     
-    // Main sections
-    html += renderSection('TITHI', panchangamData.tithi, nowBase, config.timeZone, false);
-    html += renderSection('NAKSHATRAM', panchangamData.nakshatram, nowBase, config.timeZone, false);
-    html += renderSection('YOGAM', panchangamData.yogam, nowBase, config.timeZone, false);
-    html += renderSection('KARANAM', panchangamData.karanam, nowBase, config.timeZone, false);
+    // Main sections use base city data
+    html += renderSection('TITHI', basePanchangam.tithi, nowBase, config.timeZone, false);
+    html += renderSection('NAKSHATRAM', basePanchangam.nakshatram, nowBase, config.timeZone, false);
+    html += renderSection('YOGAM', basePanchangam.yogam, nowBase, config.timeZone, false);
+    html += renderSection('KARANAM', basePanchangam.karanam, nowBase, config.timeZone, false);
     
-    // Inauspicious times
-    if (panchangamData.rahukala && panchangamData.rahukala.length > 0) {
-        html += renderSection('RAHUKALA', panchangamData.rahukala, nowBase, config.timeZone, true);
+    // Inauspicious times use respective city data for current date
+    const rahukalaToday = findInauspiciousForDate(cityPanchangam.rahukala, cityDate);
+    const yamagandaToday = findInauspiciousForDate(cityPanchangam.yamaganda, cityDate);
+    const durmuhurthaToday = findInauspiciousForDate(cityPanchangam.durmuhurtha, cityDate);
+    const varjyamToday = findInauspiciousForDate(cityPanchangam.varjyam, cityDate);
+    
+    if (rahukalaToday.length > 0) {
+        html += renderInauspiciousSection('RAHUKALA', rahukalaToday, config.timeZone);
     }
-    if (panchangamData.yamaganda && panchangamData.yamaganda.length > 0) {
-        html += renderSection('YAMAGANDA', panchangamData.yamaganda, nowBase, config.timeZone, true);
+    if (yamagandaToday.length > 0) {
+        html += renderInauspiciousSection('YAMAGANDA', yamagandaToday, config.timeZone);
     }
-    if (panchangamData.durmuhurtha && panchangamData.durmuhurtha.length > 0) {
-        html += renderSection('DURMUHURTHA', panchangamData.durmuhurtha, nowBase, config.timeZone, true);
+    if (durmuhurthaToday.length > 0) {
+        html += renderInauspiciousSection('DURMUHURTHA', durmuhurthaToday, config.timeZone);
     }
-    if (panchangamData.varjyam && panchangamData.varjyam.length > 0) {
-        html += renderSection('VARJYAM', panchangamData.varjyam, nowBase, config.timeZone, true);
+    if (varjyamToday.length > 0) {
+        html += renderInauspiciousSection('VARJYAM', varjyamToday, config.timeZone);
     }
     
     html += '</div>';
@@ -262,20 +338,19 @@ async function init() {
         const browserTimeStr = formatDateTime(browserNow, browserTZ);
         document.getElementById('browserTime').textContent = 'Current time (your browser): ' + browserTimeStr;
         
-        // Load panchangam data
-        panchangamData = await loadPanchangam(baseCity);
-        console.log('Loaded data:', panchangamData);
+        // Load panchangam data for ALL cities
+        const cityNames = Object.keys(CITIES);
+        for (let i = 0; i < cityNames.length; i++) {
+            const cityName = cityNames[i];
+            panchangamDataByCity[cityName] = await loadPanchangam(cityName);
+        }
         
         // Render all cities
         let gridHtml = '';
-        const cityNames = Object.keys(CITIES);
         for (let i = 0; i < cityNames.length; i++) {
             gridHtml += renderCity(cityNames[i], cityNames[i] === baseCity);
         }
         document.getElementById('citiesGrid').innerHTML = gridHtml;
-        
-        // Update footer
-        document.getElementById('footer').innerHTML = 'All three columns use Panchangam data from <strong>' + baseCity + '</strong>.<br>Date format: YYYY-mmm-DD HH:MM';
         
         // Auto-refresh every minute
         setInterval(function() {
