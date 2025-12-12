@@ -33,7 +33,7 @@ Dashami: 2025/12/29 10:12 to 2025/12/30 07:51
 Ekadashi: 2025/12/30 07:51 to 2025/12/31 05:00
 Dvadashi: 2025/12/31 05:00 to 2026/01/01 01:48
 
-Nakshatram details:
+Nakshatra details:
 ==============
 
 Ashvini: 2025/12/01 23:18 to 2025/12/02 20:51
