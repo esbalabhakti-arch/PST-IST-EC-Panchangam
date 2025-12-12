@@ -132,7 +132,7 @@ function parseItemsFromSection(sectionText) {
 
 function parsePanchangamText(text) {
   const thithiSection = extractSection(text, "Thithi");
-  const nakshatraSection = extractSection(text, "Nakshatram");
+  const nakshatraSection = extractSection(text, "Nakshatram") || extractSection(text, "Nakshatra");
   const yogamSection = extractSection(text, "Yogam");
   const karanamSection = extractSection(text, "Karanam");
 
@@ -276,3 +276,4 @@ function setDataSourceLabel(userCityId) {
       });
     });
 })();
+
