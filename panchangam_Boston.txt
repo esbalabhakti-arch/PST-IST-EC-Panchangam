@@ -34,7 +34,7 @@ Dashami: 2025/12/28 23:42 to 2025/12/29 21:21
 Ekadashi: 2025/12/29 21:21 to 2025/12/30 18:30
 Dvadashi: 2025/12/30 18:30 to 2025/12/31 15:18
 
-Nakshatram details:
+Nakshatra details:
 ==============
 
 Revati: 2025/12/01 00:00 to 2025/12/01 12:48
