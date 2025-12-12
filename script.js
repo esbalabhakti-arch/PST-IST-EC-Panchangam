@@ -39,21 +39,21 @@ function formatDateTime(date, timeZone) {
     }
 }
 
-// Utility: Get date only in YYYY-MM-DD format for matching
-function getDateOnly(date, timeZone) {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: timeZone
-    });
+// Utility: Format raw timestamp string from file to display format
+function formatRawTimestamp(timestampStr) {
+    // Input: "2025/12/12 10:37"
+    // Output: "2025-dec-12 10:37"
+    const match = timestampStr.match(/(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})/);
+    if (!match) return timestampStr;
     
-    const parts = formatter.formatToParts(date);
-    const year = parts.find(function(p) { return p.type === 'year'; }).value;
-    const month = parts.find(function(p) { return p.type === 'month'; }).value;
-    const day = parts.find(function(p) { return p.type === 'day'; }).value;
+    const year = match[1];
+    const monthNum = parseInt(match[2]);
+    const month = MONTHS[monthNum - 1];
+    const day = match[3];
+    const hour = match[4];
+    const minute = match[5];
     
-    return year + '-' + month + '-' + day;
+    return year + '-' + month + '-' + day + ' ' + hour + ':' + minute;
 }
 
 // Utility: Parse timestamp from file (YYYY/MM/DD HH:MM)
@@ -101,7 +101,7 @@ function detectBaseCity() {
     return closest;
 }
 
-// Parse a section from panchangam text
+// Parse a section from panchangam text - returns intervals with RAW timestamp strings
 function parseSection(text, sectionName) {
     const variations = [
         sectionName + ' details:',
@@ -155,7 +155,13 @@ function parseSection(text, sectionName) {
         const end = parseTimestamp(endStr);
         
         if (start && end) {
-            intervals.push({ label: label, start: start, end: end });
+            intervals.push({ 
+                label: label, 
+                start: start, 
+                end: end,
+                startRaw: startStr,  // Keep raw string from file
+                endRaw: endStr       // Keep raw string from file
+            });
         }
     }
     
@@ -254,8 +260,8 @@ function renderSection(title, intervals, nowBase, cityTimeZone, isInauspicious) 
     return html;
 }
 
-// Render inauspicious times section for specific city
-function renderInauspiciousSection(title, intervals, cityTimeZone) {
+// Render inauspicious times section - displays RAW timestamps from file
+function renderInauspiciousSection(title, intervals) {
     if (intervals.length === 0) return '';
     
     let html = '<div class="section inauspicious-section">';
@@ -264,8 +270,9 @@ function renderInauspiciousSection(title, intervals, cityTimeZone) {
     
     for (let i = 0; i < intervals.length; i++) {
         const interval = intervals[i];
-        const startStr = formatDateTime(interval.start, cityTimeZone);
-        const endStr = formatDateTime(interval.end, cityTimeZone);
+        // Use RAW timestamps from the file, just format them nicely
+        const startStr = formatRawTimestamp(interval.startRaw);
+        const endStr = formatRawTimestamp(interval.endRaw);
         html += '<div class="current-item">' + interval.label + '</div>';
         html += '<div class="next-item">' + startStr + ' to ' + endStr + '</div>';
         if (i < intervals.length - 1) html += '<br>';
@@ -275,12 +282,29 @@ function renderInauspiciousSection(title, intervals, cityTimeZone) {
     return html;
 }
 
+// Get local date in YYYY-MM-DD format
+function getLocalDate(date, timeZone) {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: timeZone
+    });
+    
+    const parts = formatter.formatToParts(date);
+    const year = parts.find(function(p) { return p.type === 'year'; }).value;
+    const month = parts.find(function(p) { return p.type === 'month'; }).value;
+    const day = parts.find(function(p) { return p.type === 'day'; }).value;
+    
+    return year + '-' + month + '-' + day;
+}
+
 // Render city column
 function renderCity(cityName, isBase) {
     const config = CITIES[cityName];
     const nowBase = new Date();
     const cityLocalTime = formatDateTime(nowBase, config.timeZone);
-    const cityDate = getDateOnly(nowBase, config.timeZone);
+    const cityDate = getLocalDate(nowBase, config.timeZone);
     
     const basePanchangam = panchangamDataByCity[baseCity];
     const cityPanchangam = panchangamDataByCity[cityName];
@@ -309,16 +333,16 @@ function renderCity(cityName, isBase) {
     const varjyamToday = findInauspiciousForDate(cityPanchangam.varjyam, cityDate);
     
     if (rahukalaToday.length > 0) {
-        html += renderInauspiciousSection('RAHUKALA', rahukalaToday, config.timeZone);
+        html += renderInauspiciousSection('RAHUKALA', rahukalaToday);
     }
     if (yamagandaToday.length > 0) {
-        html += renderInauspiciousSection('YAMAGANDA', yamagandaToday, config.timeZone);
+        html += renderInauspiciousSection('YAMAGANDA', yamagandaToday);
     }
     if (durmuhurthaToday.length > 0) {
-        html += renderInauspiciousSection('DURMUHURTHA', durmuhurthaToday, config.timeZone);
+        html += renderInauspiciousSection('DURMUHURTHA', durmuhurthaToday);
     }
     if (varjyamToday.length > 0) {
-        html += renderInauspiciousSection('VARJYAM', varjyamToday, config.timeZone);
+        html += renderInauspiciousSection('VARJYAM', varjyamToday);
     }
     
     html += '</div>';
