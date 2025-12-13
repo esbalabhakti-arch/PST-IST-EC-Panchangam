@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 600px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -59,10 +59,7 @@
             border-bottom: 2px solid #3498db;
         }
 
-        .cities-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 25px;
+        .city-container {
             padding: 25px;
         }
 
@@ -194,10 +191,6 @@
         }
 
         @media (max-width: 768px) {
-            .cities-grid {
-                grid-template-columns: 1fr;
-            }
-            
             .header-text h1 {
                 font-size: 1.3em;
             }
@@ -222,7 +215,7 @@
             Loading...
         </div>
 
-        <div class="cities-grid" id="citiesGrid">
+        <div class="city-container" id="cityContainer">
             <div class="loading">Loading Panchangam data...</div>
         </div>
 
