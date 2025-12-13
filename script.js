@@ -159,8 +159,8 @@ function parseSection(text, sectionName) {
                 label: label, 
                 start: start, 
                 end: end,
-                startRaw: startStr,  // Keep raw string from file
-                endRaw: endStr       // Keep raw string from file
+                startRaw: startStr,
+                endRaw: endStr
             });
         }
     }
@@ -270,7 +270,6 @@ function renderInauspiciousSection(title, intervals) {
     
     for (let i = 0; i < intervals.length; i++) {
         const interval = intervals[i];
-        // Use RAW timestamps from the file, just format them nicely
         const startStr = formatRawTimestamp(interval.startRaw);
         const endStr = formatRawTimestamp(interval.endRaw);
         html += '<div class="current-item">' + interval.label + '</div>';
@@ -300,7 +299,7 @@ function getLocalDate(date, timeZone) {
 }
 
 // Render city column
-function renderCity(cityName, isBase) {
+function renderCity(cityName) {
     const config = CITIES[cityName];
     const nowBase = new Date();
     const cityLocalTime = formatDateTime(nowBase, config.timeZone);
@@ -313,9 +312,7 @@ function renderCity(cityName, isBase) {
     html += '<div class="city-header">';
     html += '<div class="city-name">' + cityName + '</div>';
     html += '<div class="city-timezone">' + config.timeZone + '</div>';
-    if (isBase) {
-        html += '<div class="you-are-here">You are here!</div>';
-    }
+    html += '<div class="you-are-here">You are here!</div>';
     html += '</div>';
     
     html += '<div class="local-time">Local time here: ' + cityLocalTime + '</div>';
@@ -369,12 +366,8 @@ async function init() {
             panchangamDataByCity[cityName] = await loadPanchangam(cityName);
         }
         
-        // Render all cities
-        let gridHtml = '';
-        for (let i = 0; i < cityNames.length; i++) {
-            gridHtml += renderCity(cityNames[i], cityNames[i] === baseCity);
-        }
-        document.getElementById('citiesGrid').innerHTML = gridHtml;
+        // Render ONLY the detected city
+        document.getElementById('cityContainer').innerHTML = renderCity(baseCity);
         
         // Auto-refresh every minute
         setInterval(function() {
@@ -383,17 +376,13 @@ async function init() {
             const browserTimeStr = formatDateTime(browserNow, browserTZ);
             document.getElementById('browserTime').textContent = 'Current time (your browser): ' + browserTimeStr;
             
-            let gridHtml = '';
-            const cityNames = Object.keys(CITIES);
-            for (let i = 0; i < cityNames.length; i++) {
-                gridHtml += renderCity(cityNames[i], cityNames[i] === baseCity);
-            }
-            document.getElementById('citiesGrid').innerHTML = gridHtml;
+            // Re-render only the detected city
+            document.getElementById('cityContainer').innerHTML = renderCity(baseCity);
         }, 60000);
         
     } catch (error) {
         console.error('Initialization error:', error);
-        document.getElementById('citiesGrid').innerHTML = '<div class="error"><strong>Error loading Panchangam data:</strong><br>' + error.message + '<br><br>Please ensure the panchangam text files are in the same directory as this HTML file.</div>';
+        document.getElementById('cityContainer').innerHTML = '<div class="error"><strong>Error loading Panchangam data:</strong><br>' + error.message + '<br><br>Please ensure the panchangam text files are in the same directory as this HTML file.</div>';
     }
 }
 
